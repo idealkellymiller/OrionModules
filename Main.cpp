@@ -80,13 +80,73 @@ void ShowMainMenuBar()
 	}
 }
 
+static float pos[3];
+static float rot[3];
+static float scale[3];
+static bool scaleUniform;
+
+void ShowTransformComponent()
+{
+	//TODO: transform component
+	if (ImGui::CollapsingHeader("Transform"))
+	{
+		float oldScaleValues[3] = { scale[0], scale[1], scale[2] };
+
+		// transform sliders
+		ImGui::DragFloat3("Position", pos, 0.005f, -FLT_MAX, +FLT_MAX, "%.3f");
+		ImGui::DragFloat3("Rotation", rot, 0.005f, -FLT_MAX, +FLT_MAX, "%.3f");
+
+		if (ImGui::DragFloat3("Scale", scale, 0.005f, -FLT_MAX, +FLT_MAX, "%.3f"))
+		{
+			float deltaX = scale[0] - oldScaleValues[0];
+			float deltaY = scale[1] - oldScaleValues[1];
+			float deltaZ = scale[2] - oldScaleValues[2];
+
+			// check if scale uniform is on
+			if (scaleUniform)
+			{
+				// change all sliders the same amount as changed slider
+				if (deltaX != 0)
+				{
+					scale[1] += deltaX;
+					scale[2] += deltaX;
+				}
+				else if (deltaY != 0)
+				{
+					scale[0] += deltaY;
+					scale[2] += deltaY;
+				}
+				else if (deltaZ != 0)
+				{
+					scale[0] += deltaZ;
+					scale[1] += deltaZ;
+				}
+			}
+		}
+		ImGui::Checkbox("Scale Uniform", &scaleUniform);
+
+	}
+}
+
+static bool isTrigger;
+
+void ShowMeshColliderComponent()
+{
+	if (ImGui::CollapsingHeader("Mesh Collider"))
+	{
+		ImGui::Checkbox("Is Trigger", &isTrigger);
+	}
+}
+
 void ShowInspectorModule()
 {
+
 	if (showInspectorModule) 
 	{
 		if (ImGui::Begin("Inspector", &showInspectorModule)) 
 		{
-			//TODO: transform component
+			ShowTransformComponent();
+			ShowMeshColliderComponent();
 		}
 		ImGui::End();
 	}
@@ -99,7 +159,7 @@ void ShowViewportModule()
 		if (ImGui::Begin("Viewport", &showViewportModule))
 		{
 			//TODO: myca
-			// luke rrequests this holds a 2d image so it can be updated by the renderer later for now
+			// luke requests this holds a 2d image so it can be updated by the renderer later for now
 		}
 		ImGui::End();
 	}
@@ -129,6 +189,27 @@ void ShowFileDirectoryModule()
 	}
 }
 
+void ShowConsoleTraceOutput(const char* source, const char* message)
+{
+	ImU32 consoleTraceGray = ImGui::GetColorU32(ImVec4(0.7f, 0.7f, 0.7f, 0.65f));
+	ImGui::Text("[%s] : %s", source, message);
+	ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, consoleTraceGray);
+}
+
+void ShowConsoleWarningOutput(const char* source, const char* message)
+{
+	ImU32 consoleWarningYellow = ImGui::GetColorU32(ImVec4(0.6f, 0.4f, 0.04f, 0.85f));
+	ImGui::Text("[%s] : %s", source, message);
+	ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, consoleWarningYellow);
+}
+
+void ShowConsoleErrorOutput(const char* source, const char* message)
+{
+	ImU32 consoleErrorRed = ImGui::GetColorU32(ImVec4(0.8f, 0.1f, 0.04f, 0.65f));
+	ImGui::Text("[%s] : %s", source, message);
+	ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, consoleErrorRed);
+}
+
 void ShowConsoleModule()
 {
 	if (showConsoleModule)
@@ -136,6 +217,49 @@ void ShowConsoleModule()
 		if (ImGui::Begin("Console", &showConsoleModule))
 		{
 			// TODO: kelly
+			// Helper class to easy setup a text filter.
+			// You may want to implement a more feature-full filtering scheme in your own application.
+			HelpMarker("Not a widget per-se, but ImGuiTextFilter is a helper to perform simple filtering on text strings.");
+			static ImGuiTextFilter filter;
+			filter.Draw("Search");
+			//const char* lines[] = { "aaa1.c", "bbb1.c", "ccc1.c", "aaa2.cpp", "bbb2.cpp", "ccc2.cpp", "abc.h", "hello, world" };
+			//for (int i = 0; i < IM_COUNTOF(lines); i++)
+			//	if (filter.PassFilter(lines[i]))
+			//		ImGui::BulletText("%s", lines[i]);
+			//ImGui::TreePop();
+
+			if (ImGui::BeginTable("ConsoleOutputTable", 1))
+			{
+				ImGui::TableSetupColumn("Output", ImGuiTableColumnFlags_WidthFixed);
+				
+				ImGui::TableNextRow();
+				if (ImGui::TableSetColumnIndex(0))
+				{
+					ShowConsoleTraceOutput("TEST", "This is an example trace output.");
+				}
+				
+				ImGui::TableNextRow();
+				if (ImGui::TableNextColumn())
+				{
+					ShowConsoleWarningOutput("TEST", "This is an example warning output.");
+				}
+
+				ImGui::TableNextRow();
+				if (ImGui::TableNextColumn())
+				{
+					ShowConsoleErrorOutput("TEST", "This is an example error output!");
+				}
+
+				for (int i = 0; i < 50; i++) {
+					ImGui::TableNextRow();
+					if (ImGui::TableNextColumn())
+					{
+						ShowConsoleTraceOutput("TEST", std::format("Output {}", i).c_str());
+					}
+				}
+
+			}
+			ImGui::EndTable();
 		}
 		ImGui::End();
 	}
@@ -178,7 +302,7 @@ void ShowControlsModule()
 				auto it = ControlTextMap.begin();
 
 				// set up all row entries
-				for (int row = 0; row < 11; row++)
+				for (int row = 0; row < ControlTextMap.size(); row++)
 				{
 					ImGui::TableNextRow();
 					ImGui::TableSetColumnIndex(0);
@@ -199,7 +323,6 @@ void ShowControlsModule()
 
 int main()
 {
-
 	const int window_width = 1920;
 	const int window_height = 1080;
 
@@ -271,7 +394,9 @@ int main()
 	// swap the two buffers so the back buffer is the front buffer now.
 	glfwSwapBuffers(window);
 
+	// -------------------IMGUI INITIALIZATION-------------------
 	IMGUI_CHECKVERSION();
+
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO(); (void)io;
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
@@ -284,7 +409,7 @@ int main()
 	glClearColor(0.01f, 0.13f, 0.17f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT);
 
-	// while this window is not closed
+	// -------------------APPLICATION WINDOW LOOP-------------------
 	while (!glfwWindowShouldClose(window))
 	{	
 
@@ -300,10 +425,6 @@ int main()
 		ImGui_ImplGlfw_NewFrame();
 		ImGui::NewFrame();
 		ImGui::DockSpaceOverViewport();
-
-		ImGui::Begin("TestWindow");
-		ImGui::Text("IM SO AAAAAAAAAA");
-		ImGui::End();
 		
 		ShowMainMenuBar();
 		ShowInspectorModule();
