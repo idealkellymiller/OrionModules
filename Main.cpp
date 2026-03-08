@@ -3,6 +3,12 @@
 #include "imgui_impl_opengl3.h"
 
 #include <iostream>
+//Needed to add this for the file system to work
+#include <filesystem>
+//for viewport
+#define STB_IMAGE_IMPLEMENTATION
+#include <image/stb_image.h>
+
 #include <map>
 #include <vector>
 #include <string>
@@ -152,6 +158,30 @@ void ShowInspectorModule()
 	}
 }
 
+GLuint viewportTexture;
+int viewportWidth = 800;
+int viewportHeight = 600;
+void CreateViewportTexture()
+{
+	glGenTextures(1, &viewportTexture);
+	glBindTexture(GL_TEXTURE_2D, viewportTexture);
+
+	glTexImage2D(
+		GL_TEXTURE_2D,
+		0,
+		GL_RGB,
+		viewportWidth,
+		viewportHeight,
+		0,
+		GL_RGB,
+		GL_UNSIGNED_BYTE,
+		nullptr // there no data yet
+	);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+}
+
 void ShowViewportModule()
 {
 	if (showViewportModule)
@@ -160,10 +190,58 @@ void ShowViewportModule()
 		{
 			//TODO: myca
 			// luke requests this holds a 2d image so it can be updated by the renderer later for now
+			ImVec2 size = ImGui::GetContentRegionAvail();
+
+			ImGui::Image(
+				(ImTextureID)(intptr_t)viewportTexture,
+				size,
+				ImVec2(0, 1),
+				ImVec2(1, 0)
+			);
 		}
 		ImGui::End();
 	}
 }
+
+struct HierarchyNode
+{
+	std::string name;
+	std::vector<HierarchyNode> children;
+};
+//testing 
+std::vector<HierarchyNode> hierarchy =
+{
+	{"Scene",
+		{
+			{"Camera"},
+			{"Player",
+				{
+					{"Weapon"},
+					{"Mesh"}
+				}
+			},
+			{"Light"}
+		}
+	}
+};
+void DrawHierarchyNode(const HierarchyNode& node)
+{
+	ImGui::TableNextRow();
+	ImGui::TableNextColumn();
+
+	bool open = ImGui::TreeNode(node.name.c_str());
+
+	if (open)
+	{
+		for (const auto& child : node.children)
+		{
+			DrawHierarchyNode(child);
+		}
+
+		ImGui::TreePop();
+	}
+}
+
 
 void ShowHierarchyModule()
 {
@@ -172,9 +250,69 @@ void ShowHierarchyModule()
 		if (ImGui::Begin("Hierarchy", &showHierarchyModule))
 		{
 			//TODO: myca
+			if (ImGui::BeginTable("HierarchyTable", 1))
+			{
+				for (const auto& node : hierarchy)
+				{
+					DrawHierarchyNode(node);
+				}
+
+				ImGui::EndTable();
+			}
 		}
 		ImGui::End();
 	}
+}
+
+//holds the files
+namespace fs = std::filesystem;
+void DrawDirectoryTree(const fs::path& path)
+{
+	for (const auto& entry : fs::directory_iterator(path))
+	{
+		const auto& p = entry.path();
+		std::string name = p.filename().string();
+		if (entry.is_directory())
+		{
+			if (ImGui::TreeNode(name.c_str()))
+			{
+				DrawDirectoryTree(p);
+				ImGui::TreePop();
+			}
+		}
+		else
+		{
+			ImGui::BulletText("%s", name.c_str());
+		}
+	}
+}
+
+//search bar for files
+void DrawDirectorySearch(const fs::path& path, ImGuiTextFilter& filter)
+{
+	for (const auto& entry : fs::recursive_directory_iterator(path))
+	{
+		std::string name = entry.path().filename().string();
+
+		if (filter.PassFilter(name.c_str()))
+		{
+			if (ImGui::Selectable(name.c_str()))
+			{
+
+			}
+		}
+	}
+}
+//puts them together
+void DrawDirectory(const fs::path& path)
+{
+	static ImGuiTextFilter filter;
+	filter.Draw("Search");
+	bool searching = strlen(filter.InputBuf) > 0;
+	if (searching)
+		DrawDirectorySearch(path, filter);
+	else
+		DrawDirectoryTree(path);
 }
 
 void ShowFileDirectoryModule()
@@ -184,6 +322,11 @@ void ShowFileDirectoryModule()
 		if (ImGui::Begin("File Directory", &showFileDirectoryModule))
 		{
 			//TODO: myca
+			//used the helper cause i thought it would be helpful lol
+			HelpMarker("This showes the files in the project, you can use the search bar to find a specific files");
+
+			DrawDirectory(".");
+
 		}
 		ImGui::End();
 	}
